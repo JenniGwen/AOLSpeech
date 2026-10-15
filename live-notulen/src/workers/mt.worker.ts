@@ -41,9 +41,14 @@ self.onmessage = (e: MessageEvent) => {
       const t0 = performance.now();
       try {
         const tr = await getTranslator(m.mode);
-        const [out] = (await tr(m.text!, { max_new_tokens: 256, num_beams: 1 } as any)) as { translation_text: string }[];
-        cache.set(key, out.translation_text);
-        post({ ...reply, text: out.translation_text, latencyMs: performance.now() - t0 });
+        // opus-mt sering berhenti setelah kalimat pertama (apalagi teks campur) → terjemahkan per kalimat
+        const sentences = m.text!.split(/(?<=[.!?…])\s+/).filter((s) => s.trim());
+        const outs = (await tr(sentences, { max_new_tokens: 256, num_beams: 1 } as any)) as { translation_text: string }[];
+        // opus-mt kadang menambah ekor tanda baca berulang ("done.!!!!!", "UKM...") → rapikan
+        const clean = (t: string) => t.trim().replace(/([.!?])[.!?…]+$/, "$1").replace(/\.{2,}$/, ".");
+        const text = outs.map((o) => clean(o.translation_text)).join(" ");
+        cache.set(key, text);
+        post({ ...reply, text, latencyMs: performance.now() - t0 });
         return;
       } catch (err) {
         post({ ...reply, text: null, error: String(err) });

@@ -1,11 +1,15 @@
 /// <reference lib="webworker" />
 // ASR worker: chunk 0,5 s → MFCC manual → VAD c0 → segmentasi → Whisper (lokal) → SpeakerTracker.
 // Port dari simulate_stream() di notebook Bagian 8. Tidak ada audio yang dikirim ke server mana pun.
-import { pipeline, Tensor, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
+import { env, pipeline, Tensor, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
 import { HF_REPO, LANGUAGE, SR, STREAM } from "../config";
 import { mfcc } from "../dsp/mfcc";
 import { C0Vad } from "../dsp/vad";
 import { SpeakerTracker } from "../dsp/speaker";
+
+// Opsional: host model lain dengan struktur HF ({model}/resolve/{revision}/…), mis. mirror lokal untuk uji model baru.
+// Default (tidak di-set) = huggingface.co.
+if (import.meta.env.VITE_HF_HOST) env.remoteHost = import.meta.env.VITE_HF_HOST;
 
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
 
@@ -40,7 +44,7 @@ async function load(wasmOnly = false) {
   const create = (device: "webgpu" | "wasm") =>
     (pipeline as any)("automatic-speech-recognition", HF_REPO, {
       device,
-      // WASM: sesuai brief (decoder q8). WebGPU: decoder fp32 — ukuran file sama (~208 MB) dan op int8 tidak didukung WebGPU.
+      // WASM: sesuai brief (decoder q8 per-channel, 76 MB; WER setara fp32). WebGPU: decoder fp32 (199 MB) — op int8 tidak didukung WebGPU.
       dtype: { encoder_model: "fp32", decoder_model_merged: device === "webgpu" ? "fp32" : "q8" },
       progress_callback,
     }) as Promise<AutomaticSpeechRecognitionPipeline>;
