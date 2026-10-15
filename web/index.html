@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UKM Live Notulen</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2563eb; --rec: #dc2626; --ok: #16a34a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --card: #171a21; --text: #e5e7eb; --muted: #9ca3af; --line: #2a2f3a; --accent: #60a5fa; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 14px; height: 100vh; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  select, button, .seg label { font: inherit; }
+  select { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  #rec { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--rec); color: #fff; font-weight: 600; cursor: pointer; }
+  #rec:disabled { opacity: .45; cursor: wait; }
+  #rec .dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+  #rec.on .dot { border-radius: 2px; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .seg input { display: none; }
+  .seg label { padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--muted); }
+  .seg input:checked + label { background: var(--accent); color: #fff; }
+  .right { margin-left: auto; display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .vad { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .vad.silent { background: var(--muted); } .vad.speech { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 25%, transparent); }
+  .status { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+  .status.err, #status.err { color: var(--rec); }
+  #bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  #bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  #transcript { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; min-height: 200px; }
+  #empty { color: var(--muted); text-align: center; margin: auto; max-width: 440px; font-size: 14px; }
+  .row .meta { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+  .spk { color: var(--c); font-weight: 600; }
+  .ts { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .row .txt { margin-top: 1px; }
+  .row .orig { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  #partial .txt { color: var(--muted); font-style: italic; }
+  .spin { width: 11px; height: 11px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: r .8s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  footer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+  footer button, footer a { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; text-decoration: none; font-size: 13px; }
+  footer button:disabled { opacity: .45; cursor: default; }
+  #stats { margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>UKM Live Notulen</h1>
+    <p>Live transcript meeting Indonesia + English (Whisper-base fine-tuned code-switching), jalan 100% di browser.</p>
+  </header>
+
+  <div class="card controls">
+    <button id="rec" disabled><span class="dot"></span><span id="rec-label">Record screen</span></button>
+    <select id="source" title="Sumber audio">
+      <option value="both">Layar/tab + mic saya</option>
+      <option value="screen">Layar/tab saja</option>
+      <option value="mic">Mic saja</option>
+    </select>
+    <div class="seg" role="radiogroup" aria-label="Mode transkrip">
+      <input type="radio" name="mode" id="m-orig" value="orig" checked><label for="m-orig">Asli (campur)</label>
+      <input type="radio" name="mode" id="m-en" value="en"><label for="m-en">Full English</label>
+      <input type="radio" name="mode" id="m-id" value="id"><label for="m-id">Full Indonesia</label>
+    </div>
+    <div class="right"><span id="vad" class="vad" title="VAD (c0)"></span><span id="timer">00:00</span></div>
+  </div>
+
+  <div class="status"><span id="status">Memuat model…</span><div id="bar"><div></div></div></div>
+
+  <div id="transcript" class="card">
+    <div id="empty">Klik <b>Record screen</b>, pilih tab meeting (Google Meet / Zoom web / Teams) dan centang <b>“Share tab audio”</b>. Transkrip muncul di sini secara live.</div>
+    <div id="partial" class="row" hidden><div class="meta"><span class="ts">live…</span><span class="spin"></span></div><div class="txt"></div></div>
+  </div>
+
+  <footer>
+    <button id="copy" disabled>Copy</button>
+    <button id="dl-txt" disabled>Download .txt</button>
+    <a id="dl-video" hidden>Download rekaman</a>
+    <button id="clear">Clear</button>
+    <span id="stats"></span>
+  </footer>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
