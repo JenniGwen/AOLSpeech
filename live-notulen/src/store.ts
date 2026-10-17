@@ -26,6 +26,8 @@ interface State {
   sessionId: string;
   title: string;
   createdAt: number;
+  /** Tanggal & jam meeting (dipilih user; default = saat notulen dibuat). */
+  meetingAt: number;
   segments: Segment[];
   partial: { id: number; text: string } | null;
   speakerNames: Record<number, string>;
@@ -45,6 +47,7 @@ interface State {
   setRecording(on: boolean): void;
   setRecordingUrl(url: string | null): void;
   setTitle(t: string): void;
+  setMeetingAt(t: number): void;
   renameSpeaker(i: number, name: string): void;
   newSession(): void;
   setNotice(n: string | null): void;
@@ -59,7 +62,9 @@ const dropTranslations = (tr: Record<string, string | null>, ids: number[]) =>
   Object.fromEntries(Object.entries(tr).filter(([k]) => !ids.includes(Number(k.split(":")[1]))));
 
 export const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
-export const defaultTitle = () => `Meeting UKM ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`;
+/** Waktu sekarang dibulatkan ke menit (input jam tidak punya detik). */
+export const nowMinute = () => Math.floor(Date.now() / 60000) * 60000;
+export const defaultTitle = (at = Date.now()) => `Meeting UKM ${new Date(at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`;
 
 export const useStore = create<State>()((set, get) => ({
   status: "loading",
@@ -73,6 +78,7 @@ export const useStore = create<State>()((set, get) => ({
   sessionId: newId(),
   title: defaultTitle(),
   createdAt: Date.now(),
+  meetingAt: nowMinute(),
   segments: [],
   partial: null,
   speakerNames: {},
@@ -94,9 +100,11 @@ export const useStore = create<State>()((set, get) => ({
     set({ recordingUrl: url });
   },
   setTitle: (title) => set({ title }),
+  // judul masih bawaan → ikut tanggal meeting yang baru
+  setMeetingAt: (meetingAt) => set((s) => ({ meetingAt, title: s.title === defaultTitle(s.meetingAt) ? defaultTitle(meetingAt) : s.title })),
   renameSpeaker: (i, name) => set((s) => ({ speakerNames: { ...s.speakerNames, [i]: name } })),
   newSession: () =>
-    set({ sessionId: newId(), title: defaultTitle(), createdAt: Date.now(), segments: [], partial: null, speakerNames: {}, translations: {}, log: [], lastPartialMs: null }),
+    set({ sessionId: newId(), title: defaultTitle(), createdAt: Date.now(), meetingAt: nowMinute(), segments: [], partial: null, speakerNames: {}, translations: {}, log: [], lastPartialMs: null }),
   setNotice: (notice) => set({ notice }),
   editSegment: (id, text) =>
     set((s) => ({

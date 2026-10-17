@@ -30,7 +30,7 @@ export default function History() {
             <button className="flex-1 text-left disabled:cursor-not-allowed" disabled={recording || !!file} onClick={() => openSession(r)}>
               <div className="truncate text-sm text-slate-800">{r.title}</div>
               <div className="text-xs text-slate-400">
-                {new Date(r.updatedAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · {r.segments.length} segmen
+                {new Date(r.meetingAt ?? r.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · {r.segments.length} segmen
               </div>
             </button>
             <button

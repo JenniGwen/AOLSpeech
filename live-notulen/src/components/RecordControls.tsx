@@ -34,6 +34,30 @@ function FileProgress() {
   );
 }
 
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Pilih tanggal (kalender) + jam meeting; disimpan ke riwayat bersama notulen. */
+function MeetingDateTime({ value, onChange }: { value: number; onChange(t: number): void }) {
+  const d = new Date(value);
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const set = (dt: string, tm: string) => {
+    const t = new Date(`${dt}T${tm}`).getTime();
+    if (!Number.isNaN(t)) onChange(t);
+  };
+  const cls = "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700";
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-1 text-sm text-slate-500">
+      <label className="flex items-center gap-2">Tanggal
+        <input type="date" value={date} onChange={(e) => e.target.value && set(e.target.value, time)} className={cls} />
+      </label>
+      <label className="flex items-center gap-2">Jam
+        <input type="time" value={time} onChange={(e) => e.target.value && set(date, e.target.value)} className={cls} />
+      </label>
+    </div>
+  );
+}
+
 const STATUS_STYLE: Record<string, string> = {
   loading: "bg-amber-100 text-amber-800",
   ready: "bg-emerald-100 text-emerald-800",
@@ -62,7 +86,7 @@ function StatusPill() {
 }
 
 export default function RecordControls() {
-  const { status, recording, speech, title, setTitle, segments, file } = useStore();
+  const { status, recording, speech, title, setTitle, meetingAt, setMeetingAt, segments, file } = useStore();
   const { start, stop } = useRecorder();
   const [source, setSource] = useState<Source>(sources[0].value);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -134,6 +158,7 @@ export default function RecordControls() {
         className="w-full rounded-lg border border-transparent px-1 text-lg font-semibold outline-none hover:border-slate-200 focus:border-sky-400"
         aria-label="Judul meeting"
       />
+      <MeetingDateTime value={meetingAt} onChange={setMeetingAt} />
       <FileProgress />
       {!compat.tabAudio && canLive && !recording && (
         <p className="text-xs text-slate-500">

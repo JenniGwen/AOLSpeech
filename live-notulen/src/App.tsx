@@ -6,13 +6,18 @@ import StatsBar from "./components/StatsBar";
 import ExportButton from "./components/ExportButton";
 import History from "./components/History";
 import Banner from "./components/Banner";
+import LoadingScreen from "./components/LoadingScreen";
 import { persist, startEngine } from "./lib/engine";
 import { useStore } from "./store";
 
 export default function App() {
   const title = useStore((s) => s.title);
+  const meetingAt = useStore((s) => s.meetingAt);
+  const status = useStore((s) => s.status);
   useEffect(() => startEngine(), []);
-  useEffect(() => { persist(); }, [title]);
+  useEffect(() => { persist(); }, [title, meetingAt]);
+
+  if (status === "loading" || status === "error") return <LoadingScreen />;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-6">

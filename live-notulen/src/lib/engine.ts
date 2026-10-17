@@ -131,7 +131,7 @@ export function persist(now = false) {
     const s = S.getState();
     if (!s.segments.length) return Promise.resolve();
     const translations = Object.fromEntries(Object.entries(s.translations).filter(([, v]) => v != null));
-    return saveSession({ id: s.sessionId, title: s.title, createdAt: s.createdAt, updatedAt: Date.now(), segments: s.segments, speakerNames: s.speakerNames, translations })
+    return saveSession({ id: s.sessionId, title: s.title, createdAt: s.createdAt, meetingAt: s.meetingAt, updatedAt: Date.now(), segments: s.segments, speakerNames: s.speakerNames, translations })
       .then(() => window.dispatchEvent(new Event("sessions-changed")))
       .catch(console.error);
   };
@@ -164,7 +164,7 @@ export { displayText };
 export function openSession(r: SessionRecord) {
   persist(true);
   S.setState({
-    sessionId: r.id, title: r.title, createdAt: r.createdAt, segments: r.segments, speakerNames: r.speakerNames,
+    sessionId: r.id, title: r.title, createdAt: r.createdAt, meetingAt: r.meetingAt ?? r.createdAt, segments: r.segments, speakerNames: r.speakerNames,
     translations: r.translations, partial: null, log: [], lastPartialMs: null,
   });
   asrWorker.postMessage({ type: "reset" });

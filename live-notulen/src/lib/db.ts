@@ -5,6 +5,7 @@ export interface SessionRecord {
   id: string;
   title: string;
   createdAt: number;
+  meetingAt?: number; // tidak ada di notulen lama → pakai createdAt
   updatedAt: number;
   segments: Segment[];
   speakerNames: Record<number, string>;

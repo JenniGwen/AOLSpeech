@@ -27,6 +27,7 @@ export function useRecorder() {
   const start = useCallback(async (source: Source) => {
     if (ref.current) return;
     const streams: MediaStream[] = [];
+    let missingTabAudio = false;
     try {
       if (source !== "mic") {
         const d = await navigator.mediaDevices.getDisplayMedia({
@@ -37,8 +38,12 @@ export function useRecorder() {
           selfBrowserSurface: "exclude",
         });
         if (!d.getAudioTracks().length) {
-          d.getTracks().forEach((t) => t.stop());
-          throw new Error('Audio tidak ikut ter-share. Pilih tab meeting (Meet/Zoom web/Teams) lalu centang "Share tab audio".');
+          if (source === "tab") {
+            d.getTracks().forEach((t) => t.stop());
+            throw new Error('Audio tidak ikut ter-share. Pilih tab meeting (Meet/Zoom web/Teams) lalu centang "Share tab audio".');
+          }
+          // tab+mic tanpa audio layar → tetap jalan pakai mic saja (layar tetap direkam)
+          missingTabAudio = true;
         }
         streams.push(d);
       }
@@ -69,7 +74,8 @@ export function useRecorder() {
     }
     const node = new AudioWorkletNode(ctx, "recorder", { numberOfOutputs: 0 });
     const mix = ctx.createMediaStreamDestination();
-    for (const s of streams) {
+    // stream layar tanpa audio (hanya video) tidak bisa jadi MediaStreamSource → lewati
+    for (const s of streams.filter((x) => x.getAudioTracks().length)) {
       const src = ctx.createMediaStreamSource(s);
       src.connect(node);
       src.connect(mix);
@@ -92,7 +98,7 @@ export function useRecorder() {
     video[0]?.addEventListener("ended", stop); // user klik "Stop sharing" di bar Chrome
     ref.current = { ctx, streams, rec };
     asrWorker.postMessage({ type: "start" });
-    useStore.getState().setNotice(null);
+    useStore.getState().setNotice(missingTabAudio ? 'Audio layar tidak ikut ter-share — sekarang hanya suara mic yang ditranskrip. Untuk menangkap suara meeting, pilih tab meeting dan centang "Share tab audio".' : null);
     useStore.getState().setRecording(true);
   }, [stop]);
 
