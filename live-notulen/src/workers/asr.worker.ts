@@ -2,19 +2,21 @@
 // ASR worker: chunk 0,5 s → MFCC manual → VAD c0 → segmentasi → Whisper (lokal) → SpeakerTracker.
 // Port dari simulate_stream() di notebook Bagian 8. Tidak ada audio yang dikirim ke server mana pun.
 import { env, pipeline, Tensor, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
-import { HF_REPO, LANGUAGE, SR, STREAM } from "../config";
+import { HF_REPO, LANGUAGE, PITCH, SR, STREAM } from "../config";
 import { mfcc } from "../dsp/mfcc";
 import { C0Vad } from "../dsp/vad";
 import { SpeakerTracker } from "../dsp/speaker";
+import { f0Frames, pitchTurn, semitones } from "../dsp/pitch";
+import { cleanTranscript } from "../dsp/hallucination";
+import { transcribe } from "../dsp/whisperPrompt";
+import { applyVocab, vocabPrompt } from "../dsp/vocab";
+import { applyCorrections, correctionTerms } from "../dsp/corrections";
 
 // Opsional: host model lain dengan struktur HF ({model}/resolve/{revision}/…), mis. mirror lokal untuk uji model baru.
 // Default (tidak di-set) = huggingface.co.
 if (import.meta.env.VITE_HF_HOST) env.remoteHost = import.meta.env.VITE_HF_HOST;
 
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
-
-// Halusinasi umum Whisper pada audio pendek (dibuang hanya kalau segmennya pendek)
-const HALLU = /^(terima kasih( telah menonton| sudah menonton)?|thank you( for watching)?|sampai jumpa.*|subtitle.*|[.\-\s]*)[.!\s]*$/i;
 
 let asr: AutomaticSpeechRecognitionPipeline | null = null;
 let loadedBackend: "webgpu" | "wasm" = "wasm";
@@ -71,7 +73,11 @@ async function load(wasmOnly = false) {
 let vad = new C0Vad();
 let tracker = new SpeakerTracker();
 let seg: Float32Array[] = [];
+let segF0: number[][] = []; // F0 (Hz) frame bersuara per chunk di seg
 let segStart = 0, silence = 0, sinceUpdate = 0, tAudio = 0, segId = 0;
+// Kosakata rapat (dari UI) → prompt Whisper + koreksi ejaan
+let vocab = "";
+let corrections: Record<string, string> = {};
 // Mode file: seluruh audio di-chunk sekaligus, tanpa partial; selesai saat antrean kosong.
 let fileMode = false;
 
@@ -98,8 +104,16 @@ async function runJobs() {
     try {
       // batasi token sesuai durasi (±6 token/detik) supaya decoder tidak terjebak loop pengulangan
       const max_new_tokens = Math.min(220, Math.ceil(audioSec * 6) + 10);
-      const out = (await asr(job.audio, { language: LANGUAGE, task: "transcribe", max_new_tokens } as any)) as { text: string };
-      text = out.text.trim().replace(/^["“'](.*)["”']$/s, "$1").trim();
+      const prompt = vocabPrompt([vocab, ...correctionTerms(corrections)].filter(Boolean).join(", "));
+      let raw: string;
+      try {
+        raw = await transcribe(asr, job.audio, { language: LANGUAGE, maxNewTokens: max_new_tokens, prompt });
+      } catch (e) {
+        if (!prompt) throw e;
+        console.warn("Transkrip dengan prompt gagal → tanpa prompt", e);
+        raw = await transcribe(asr, job.audio, { language: LANGUAGE, maxNewTokens: max_new_tokens, prompt: "" });
+      }
+      text = applyCorrections(applyVocab(cleanTranscript(raw, audioSec), vocab), corrections);
     } catch (e) {
       console.error(e);
     }
@@ -108,8 +122,7 @@ async function runJobs() {
       // partial basi (segmennya sudah final) tidak perlu ditampilkan
       if (job.id === segId) post({ type: "partial", id: job.id, text, latencyMs, audioSec, t: tAudio });
     } else {
-      const drop = !text || (HALLU.test(text) && audioSec < 2.5);
-      post({ type: "final", id: job.id, text: drop ? "" : text, speaker: job.speaker, latencyMs, audioSec, start: job.start, t: fileMode ? job.start + audioSec : tAudio });
+      post({ type: "final", id: job.id, text, speaker: job.speaker, latencyMs, audioSec, start: job.start, t: fileMode ? job.start + audioSec : tAudio });
       if (fileMode) post({ type: "fileProgress", done: job.start + audioSec });
     }
   }
@@ -118,19 +131,23 @@ async function runJobs() {
   if (fileMode) { fileMode = false; post({ type: "fileDone" }); }
 }
 
-function finalize() {
-  // buang ekor hening (≥ 0,6 s) supaya Whisper tidak berhalusinasi
-  const tail = Math.min(Math.round(silence / STREAM.chunkSec), seg.length - 1);
-  const audio = concat(seg.slice(0, seg.length - tail));
-  const speaker = tracker.assign(mfcc(audio));
+/** Finalkan seg; `keep` chunk terakhir dipindah ke segmen baru (speaker berganti tanpa jeda). */
+function finalize(keep = 0) {
+  const n = seg.length - keep;
+  // buang ekor hening supaya Whisper tidak berhalusinasi
+  const tail = keep ? 0 : Math.min(Math.round(silence / STREAM.chunkSec), n - 1);
+  const audio = concat(seg.slice(0, n - tail));
+  const speaker = tracker.assign(mfcc(audio), semitones(segF0.slice(0, n - tail).flat(), 8));
   jobs.push({ kind: "final", id: segId, audio, start: segStart, speaker });
   segId++;
-  seg = [];
+  segStart += n * STREAM.chunkSec;
+  seg = seg.slice(n);
+  segF0 = segF0.slice(n);
   sinceUpdate = 0;
   runJobs();
 }
 
-const resetStream = () => { vad = new C0Vad(); seg = []; silence = 0; sinceUpdate = 0; tAudio = 0; };
+const resetStream = () => { vad = new C0Vad(); seg = []; segF0 = []; silence = 0; sinceUpdate = 0; tAudio = 0; };
 
 /** Audio file 16 kHz mono → jalankan pipeline streaming yang sama, chunk 0,5 s. */
 function transcribeFile(audio: Float32Array) {
@@ -151,12 +168,15 @@ function onChunk(chunk: Float32Array, live = true) {
   if (live) post({ type: "vad", speech: isSpeech });
   if (isSpeech && !seg.length) segStart = tAudio;
   tAudio += chunk.length / SR;
-  if (isSpeech || seg.length) seg.push(chunk);
+  if (isSpeech || seg.length) { seg.push(chunk); segF0.push(isSpeech ? f0Frames(chunk) : []); }
   silence = isSpeech ? 0 : silence + STREAM.chunkSec;
   sinceUpdate += STREAM.chunkSec;
   const segSec = seg.length * STREAM.chunkSec;
 
-  if (seg.length && (silence >= STREAM.silenceSec || segSec >= STREAM.maxSegSec)) {
+  const turn = isSpeech ? pitchTurn(segF0.map((f) => semitones(f, 5)), PITCH.turnChunks, PITCH.turnSemitones) : -1;
+  if (turn > 0) {
+    finalize(seg.length - turn); // giliran bicara berganti (pitch melompat) tanpa jeda
+  } else if (seg.length && (silence >= STREAM.silenceSec || segSec >= STREAM.maxSegSec)) {
     finalize(); // FINAL — selalu diantrikan
   } else if (!fileMode && seg.length && sinceUpdate >= STREAM.updateSec && !running && !jobs.length) {
     // PARTIAL — dilewati kalau Whisper masih jalan (jangan tumpuk inference)
@@ -184,6 +204,12 @@ self.onmessage = (e: MessageEvent) => {
       break;
     case "reset": // notulen baru
       tracker = new SpeakerTracker();
+      break;
+    case "corrections":
+      corrections = m.map ?? {};
+      break;
+    case "vocab":
+      vocab = m.text ?? "";
       break;
     case "chunk":
       onChunk(m.data);

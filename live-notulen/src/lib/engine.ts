@@ -1,6 +1,7 @@
 // Membuat 2 Web Worker (ASR, MT) dan menyambungkan pesannya ke store Zustand.
-import { displayText, useStore, type Mode, type Segment } from "../store";
+import { DEFAULT_DURATION, displayText, useStore, type Mode, type Segment } from "../store";
 import { saveSession, type SessionRecord } from "./db";
+import { applyCorrections, learnCorrections } from "../dsp/corrections";
 
 const makeAsrWorker = () => new Worker(new URL("../workers/asr.worker.ts", import.meta.url), { type: "module" });
 // `let` → import di modul lain ikut melihat worker baru kalau diganti (fallback WASM)
@@ -26,6 +27,8 @@ function onAsrMessage({ data: m }: MessageEvent) {
       break;
     }
     case "ready":
+      asrWorker.postMessage({ type: "vocab", text: S.getState().vocab });
+      asrWorker.postMessage({ type: "corrections", map: S.getState().corrections });
       S.setState({ status: "ready", backend: m.backend, error: null });
       break;
     case "error":
@@ -74,6 +77,22 @@ function onAsrMessage({ data: m }: MessageEvent) {
   }
 }
 asrWorker.onmessage = onAsrMessage;
+S.subscribe((s, prev) => {
+  if (s.vocab !== prev.vocab) asrWorker.postMessage({ type: "vocab", text: s.vocab });
+  if (s.corrections !== prev.corrections) asrWorker.postMessage({ type: "corrections", map: s.corrections });
+});
+
+/** Editan user → pelajari koreksinya, lalu terapkan juga ke segmen lain di rapat ini. */
+export function learnFromEdit(before: string, after: string) {
+  const pairs = learnCorrections(before, after);
+  if (!pairs.length) return;
+  S.getState().addCorrections(pairs);
+  const map = Object.fromEntries(pairs);
+  for (const seg of S.getState().segments) {
+    const fixed = applyCorrections(seg.text, map);
+    if (fixed !== seg.text) S.getState().editSegment(seg.id, fixed);
+  }
+}
 
 mtWorker.onmessage = ({ data: m }) => {
   if (m.type === "progress") S.setState({ mtLoading: m.mode });
@@ -124,14 +143,14 @@ export function afterEdit() {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
-/** Autosave sesi ke IndexedDB (debounce; `now` = langsung, mis. sebelum pindah sesi). */
-export function persist(now = false) {
+/** Autosave sesi ke IndexedDB (debounce; `now` = langsung, mis. sebelum pindah sesi; `force` = simpan walau masih kosong). */
+export function persist(now = false, force = false) {
   clearTimeout(saveTimer);
   const save = () => {
     const s = S.getState();
-    if (!s.segments.length) return Promise.resolve();
+    if (!force && !s.segments.length && !s.agenda.length && !s.tasks.length) return Promise.resolve();
     const translations = Object.fromEntries(Object.entries(s.translations).filter(([, v]) => v != null));
-    return saveSession({ id: s.sessionId, title: s.title, createdAt: s.createdAt, meetingAt: s.meetingAt, updatedAt: Date.now(), segments: s.segments, speakerNames: s.speakerNames, translations })
+    return saveSession({ id: s.sessionId, title: s.title, createdAt: s.createdAt, meetingAt: s.meetingAt, meetingEndAt: s.meetingEndAt, updatedAt: Date.now(), segments: s.segments, speakerNames: s.speakerNames, translations, agenda: s.agenda, tasks: s.tasks, vocab: s.vocab })
       .then(() => window.dispatchEvent(new Event("sessions-changed")))
       .catch(console.error);
   };
@@ -164,8 +183,9 @@ export { displayText };
 export function openSession(r: SessionRecord) {
   persist(true);
   S.setState({
-    sessionId: r.id, title: r.title, createdAt: r.createdAt, meetingAt: r.meetingAt ?? r.createdAt, segments: r.segments, speakerNames: r.speakerNames,
-    translations: r.translations, partial: null, log: [], lastPartialMs: null,
+    sessionId: r.id, title: r.title, createdAt: r.createdAt, meetingAt: r.meetingAt ?? r.createdAt,
+    meetingEndAt: r.meetingEndAt ?? (r.meetingAt ?? r.createdAt) + DEFAULT_DURATION, segments: r.segments, speakerNames: r.speakerNames,
+    agenda: r.agenda ?? [], tasks: r.tasks ?? [], vocab: r.vocab ?? S.getState().vocab, translations: r.translations, partial: null, log: [], lastPartialMs: null,
   });
   asrWorker.postMessage({ type: "reset" });
   const { mode } = S.getState();

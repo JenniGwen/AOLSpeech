@@ -1,15 +1,20 @@
 // IndexedDB: simpan sesi notulen per meeting (riwayat), hanya di browser user.
-import type { Segment } from "../store";
+import type { AgendaItem, Segment, Task } from "../store";
 
 export interface SessionRecord {
   id: string;
   title: string;
   createdAt: number;
   meetingAt?: number; // tidak ada di notulen lama → pakai createdAt
+  meetingEndAt?: number; // tidak ada di notulen lama → mulai + 1 jam
   updatedAt: number;
   segments: Segment[];
   speakerNames: Record<number, string>;
   translations: Record<string, string | null>;
+  agenda?: AgendaItem[];
+  tasks?: Task[];
+  archived?: boolean;
+  vocab?: string;
 }
 
 const DB = "live-notulen", STORE = "sessions";

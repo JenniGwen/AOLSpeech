@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<title>Alur Real-Time Rapatin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root { --ink: #1f2937; --muted: #4b5563; --new: #e2553f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; }
+  body { width: 1100px; height: 1680px; position: relative; font-family: Inter, -apple-system, sans-serif; color: var(--ink); }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  h1 { position: absolute; left: 40px; top: 22px; margin: 0; font-size: 24px; font-weight: 700; }
+  .legend { position: absolute; left: 640px; top: 30px; font-size: 12.5px; color: var(--muted); }
+  .frame { position: absolute; left: 30px; top: 70px; width: 1040px; height: 1590px; border: 1.5px dashed #c5cad3; border-radius: 16px; }
+  .flabel { position: absolute; left: 50px; top: 80px; font-size: 11.5px; color: #6b7280; letter-spacing: .04em; }
+  .box { position: absolute; border: 1.5px solid; border-radius: 10px; padding: 10px 14px; text-align: center; background: #fff; }
+  .box h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .box p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+  .amber { background: #fdf3df; border-color: #c9963a; }
+  .green { background: #e8f5ee; border-color: #5aa883; }
+  .indigo { background: #eceefb; border-color: #6a6fd0; }
+  .lime { background: #eef6e6; border-color: #8bb46a; }
+  .dashed { border-style: dashed; border-color: #6b7280; }
+  .steps { display: flex; gap: 8px; margin-top: 10px; }
+  .step { flex: 1; background: #fff; border: 1px solid #d9dde3; border-radius: 6px; padding: 6px 4px; }
+  .step b { display: block; font-size: 12.5px; font-weight: 600; }
+  .step span { font-size: 10.5px; color: var(--muted); }
+  .rows .r { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #d9dde3; border-radius: 6px; padding: 7px 10px; margin-top: 7px; text-align: left; }
+  .rows .r b { font-size: 12.5px; font-weight: 600; }
+  .rows .r span { font-size: 10.5px; color: var(--muted); }
+  .badge { display: inline-block; vertical-align: 1px; margin-left: 5px; padding: 1px 5px; border-radius: 4px; background: var(--new); color: #fff; font: 700 9px/1.5 Inter, sans-serif; letter-spacing: .05em; }
+  .diamond { position: absolute; left: 80px; top: 610px; width: 280px; height: 150px; }
+  .diamond-t { position: absolute; left: 80px; top: 648px; width: 280px; text-align: center; z-index: 2; }
+  .diamond-t h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .diamond-t p { margin: 2px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+  .lbl { position: absolute; font-size: 11px; color: var(--muted); background: #fff; padding: 0 3px; line-height: 1.35; }
+  svg { position: absolute; inset: 0; overflow: visible; }
+</style>
+</head>
+<body>
+  <h1>Alur Real-Time di Browser (Inference)</h1>
+  <div class="legend"><span class="badge" style="margin:0">BARU</span> = ditambahkan / berubah dibanding versi awal</div>
+  <div class="frame"></div>
+  <div class="flabel mono">BROWSER USER · web app di Vercel · inference lokal (WebGPU / WASM)</div>
+
+  <!-- sumber -->
+  <div class="box amber" style="left:90px; top:110px; width:250px; height:64px;"><h3>Tab meeting <span class="badge">BARU</span></h3><p>getDisplayMedia + tab audio</p></div>
+  <div class="box amber" style="left:425px; top:110px; width:250px; height:64px;"><h3>Mikrofon</h3><p>getUserMedia</p></div>
+  <div class="box amber" style="left:760px; top:110px; width:250px; height:64px;"><h3>Upload file <span class="badge">BARU</span></h3><p>decodeAudioData → 16 kHz</p></div>
+
+  <div class="box amber" style="left:300px; top:215px; width:500px; height:66px;"><h3>Audio stream</h3><p>AudioContext 16 kHz · AudioWorklet · chunk 0,5 s</p></div>
+  <div class="box amber" style="left:835px; top:215px; width:180px; height:66px;"><h3 style="font-size:13.5px">MediaRecorder <span class="badge">BARU</span></h3><p>rekaman .webm</p></div>
+
+  <div class="box green" style="left:90px; top:320px; width:920px; height:132px;">
+    <h3>Ekstraksi fitur MFCC manual (NumPy → port JS)</h3>
+    <div class="steps">
+      <div class="step"><b>Pre-emph</b><span class="mono">0,97</span></div>
+      <div class="step"><b>Framing</b><span class="mono">25/10 ms</span></div>
+      <div class="step"><b>Hamming</b><span class="mono">window</span></div>
+      <div class="step"><b>FFT</b><span class="mono">512</span></div>
+      <div class="step"><b>Mel</b><span class="mono">26 filter</span></div>
+      <div class="step"><b>Log</b><span class="mono">energi</span></div>
+      <div class="step"><b>DCT-II</b><span class="mono">c0–c12</span></div>
+    </div>
+    <p style="margin-top:8px">Output per frame 10 ms: 13 koefisien (c0 = energi) · parameter dari config.ts</p>
+  </div>
+
+  <div class="box green" style="left:90px; top:500px; width:260px; height:80px;"><h3>VAD dari c0</h3><p>energi &gt; noise floor + 3<br />→ bicara / hening</p></div>
+  <div class="box green" style="left:420px; top:500px; width:260px; height:80px;"><h3>Pitch F0 per chunk <span class="badge">BARU</span></h3><p>autokorelasi 70–400 Hz<br />→ semiton (median)</p></div>
+  <div class="box green" style="left:750px; top:500px; width:260px; height:80px;"><h3>Speaker embedding</h3><p>mean + std MFCC 13-d<br />+ median F0 per segmen <span class="badge">BARU</span></p></div>
+
+  <div class="diamond-t">
+    <h3>Hening ≥ 1,5 s <span class="badge">BARU</span></h3>
+    <p>atau segmen ≥ 15 s<br />atau pitch melompat ≥ 5,5 st? <span class="badge">BARU</span></p>
+  </div>
+  <div class="box green" style="left:750px; top:640px; width:260px; height:90px;"><h3>Speaker tracker <span class="badge">BARU</span></h3><p>jarak MFCC + penalti pitch<br />→ “Speaker 1, 2, …”</p></div>
+
+  <div class="box indigo rows" style="left:90px; top:800px; width:420px; height:208px; text-align:left;">
+    <h3 style="text-align:center">Whisper-base fine-tuned (ONNX)</h3>
+    <div class="r"><b>Log-mel 80 bin</b><span class="mono">bawaan Whisper</span></div>
+    <div class="r"><b>Encoder</b><span class="mono">2 Conv1D + 6 layer</span></div>
+    <div class="r"><b>Decoder + prompt <span class="badge">BARU</span></b><span class="mono">&lt;|startofprev|&gt; kosakata &lt;|id|&gt;</span></div>
+    <div class="r"><b>Token → teks</b><span class="mono">Indo + English</span></div>
+  </div>
+  <div class="box dashed" style="left:640px; top:800px; width:370px; height:90px;"><h3>Hugging Face Hub</h3><p>Whisper hasil Colab + opus-mt<br />diunduh sekali, lalu di-cache</p></div>
+  <div class="box lime" style="left:640px; top:925px; width:370px; height:100px;"><h3>Kosakata rapat + koreksi tersimpan <span class="badge">BARU</span></h3><p>diisi user / dipelajari dari editan<br />IndexedDB + localStorage → dikirim ke worker</p></div>
+
+  <div class="box green" style="left:90px; top:1080px; width:420px; height:100px;"><h3>Pasca-proses teks <span class="badge">BARU</span></h3><p>filter halusinasi (anotasi, loop, “shh”)<br />→ koreksi kosakata (ejaan + bunyi)<br />→ koreksi tersimpan</p></div>
+
+  <div class="box lime" style="left:150px; top:1220px; width:300px; height:80px;"><h3>Transkrip</h3><p>partial (abu-abu, berubah)<br />final (hitam, tetap)</p></div>
+  <div class="box indigo" style="left:150px; top:1340px; width:300px; height:80px;"><h3>Mode terjemahan</h3><p>Asli · ID · EN<br />opus-mt · segmen final saja</p></div>
+
+  <div class="box lime" style="left:330px; top:1470px; width:560px; height:130px;">
+    <h3>Notulen live</h3>
+    <p>[00:12] Speaker 1: jadi untuk event…<br />edit · gabung · catatan manual · agenda & tindak lanjut <span class="badge">BARU</span><br />latency · ekspor .docx <span class="badge">BARU</span> · .md · .txt · rekaman .webm</p>
+  </div>
+
+  <svg width="1100" height="1680">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4b5563" /></marker></defs>
+    <path d="M220 610L360 685L220 760L80 685Z" fill="#fcf0f2" stroke="#d2758a" stroke-width="1.5" />
+    <g fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)">
+      <path d="M215 174V194H440V215" />
+      <path d="M550 174V215" />
+      <path d="M885 174V194H660V215" />
+      <path d="M800 248H835" />
+      <path d="M550 281V320" />
+      <path d="M220 452V500" />
+      <path d="M880 452V500" />
+      <path d="M300 265H58V478H550V500" marker-end="none" />
+      <path d="M550 478V500" />
+      <path d="M58 478V915H90" />
+      <path d="M680 540H750" />
+      <path d="M220 580V610" />
+      <path d="M500 580V646H294" />
+      <path d="M880 580V640" />
+      <path d="M360 685H750" />
+      <path d="M220 760V800" />
+      <path d="M640 845H510" stroke-dasharray="5 4" />
+      <path d="M640 975H510" />
+      <path d="M300 1008V1080" />
+      <path d="M825 1025V1130H510" />
+      <path d="M300 1180V1220" />
+      <path d="M300 1300V1340" />
+      <path d="M300 1420V1535H330" />
+      <path d="M1010 685H1045V1535H890" />
+      <path d="M1010 865H1028V1380H450" stroke-dasharray="5 4" />
+      <path d="M890 1500H955V1025" stroke-dasharray="5 4" />
+    </g>
+  </svg>
+  <div class="lbl mono" style="left:226px; top:465px;">c0</div>
+  <div class="lbl mono" style="left:886px; top:465px;">c0–c12</div>
+  <div class="lbl mono" style="left:64px; top:440px;">audio mentah 16 kHz</div>
+  <div class="lbl mono" style="left:686px; top:518px;">F0</div>
+  <div class="lbl mono" style="left:392px; top:626px;">pitch melompat</div>
+  <div class="lbl mono" style="left:560px; top:665px;">Ya: segmen final</div>
+  <div class="lbl mono" style="left:226px; top:766px;">Belum: partial tiap 1 s · Ya: final</div>
+  <div class="lbl mono" style="left:530px; top:826px;">bobot</div>
+  <div class="lbl mono" style="left:530px; top:956px;">prompt <span class="badge" style="margin:0">BARU</span></div>
+  <div class="lbl mono" style="left:830px; top:1050px;">koreksi</div>
+  <div class="lbl mono" style="left:860px; top:1355px;">model opus-mt</div>
+  <div class="lbl mono" style="left:960px; top:1180px; text-align:right">editan →<br />koreksi<br />dipelajari<br /><span class="badge" style="margin:0">BARU</span></div>
+  <div class="lbl mono" style="left:1050px; top:1400px; writing-mode: vertical-rl;">label speaker</div>
+</body>
+</html>

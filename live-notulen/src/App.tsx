@@ -1,47 +1,46 @@
-import { useEffect } from "react";
-import RecordControls from "./components/RecordControls";
-import LiveTranscript from "./components/LiveTranscript";
-import ModeSwitch from "./components/ModeSwitch";
-import StatsBar from "./components/StatsBar";
-import ExportButton from "./components/ExportButton";
-import History from "./components/History";
-import Banner from "./components/Banner";
+import { useEffect, useState } from "react";
 import LoadingScreen from "./components/LoadingScreen";
+import { sources, type Recorder } from "./components/RecordControls";
+import { useRecorder, type Source } from "./audio/useRecorder";
 import { persist, startEngine } from "./lib/engine";
+import Archive from "./pages/Archive";
+import Calendar from "./pages/Calendar";
+import MeetingRoom from "./pages/MeetingRoom";
+import Meetings from "./pages/Meetings";
+import Members from "./pages/Members";
+import Settings from "./pages/Settings";
 import { useStore } from "./store";
+import Sidebar, { MobileNav } from "./ui/Sidebar";
 
 export default function App() {
   const title = useStore((s) => s.title);
   const meetingAt = useStore((s) => s.meetingAt);
+  const meetingEndAt = useStore((s) => s.meetingEndAt);
   const status = useStore((s) => s.status);
+  const page = useStore((s) => s.page);
+  // perekam hidup di App supaya rekaman tetap berjalan saat pindah halaman
+  const { start, stop } = useRecorder();
+  const [source, setSource] = useState<Source>(sources[0].value);
+  const rec: Recorder = { start, stop, source, setSource };
+
   useEffect(() => startEngine(), []);
-  useEffect(() => { persist(); }, [title, meetingAt]);
+  useEffect(() => { persist(); }, [title, meetingAt, meetingEndAt]);
+  useEffect(() => { window.scrollTo(0, 0); }, [page]);
 
   if (status === "loading" || status === "error") return <LoadingScreen />;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-6">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Live Notulen UKM</h1>
-          <p className="text-sm text-slate-500">Transkrip live meeting Indonesia + English · Whisper-base fine-tuned · berjalan lokal di browser</p>
-        </div>
-      </header>
-
-      <Banner />
-
-      <div className="grid flex-1 gap-4 lg:grid-cols-[1fr_280px]">
-        <main className="flex min-w-0 flex-col gap-3">
-          <RecordControls />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <ModeSwitch />
-            <ExportButton />
-          </div>
-          <LiveTranscript />
-          <StatsBar />
-        </main>
-        <History />
-      </div>
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <main className="min-w-0 flex-1 pb-20 lg:pb-0">
+        {page === "rapat" && <MeetingRoom rec={rec} />}
+        {page === "semua" && <Meetings />}
+        {page === "kalender" && <Calendar />}
+        {page === "anggota" && <Members />}
+        {page === "arsip" && <Archive />}
+        {page === "pengaturan" && <Settings />}
+      </main>
+      <MobileNav />
     </div>
   );
 }

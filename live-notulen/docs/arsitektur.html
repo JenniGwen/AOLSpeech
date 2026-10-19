@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<title>Arsitektur Rapatin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #1f2937; --muted: #4b5563; --line: #4b5563;
+    --gray-bg: #eef0f3; --gray-bd: #6b7280;
+    --amber-bg: #fdf3df; --amber-bd: #c9963a;
+    --green-bg: #e8f5ee; --green-bd: #5aa883;
+    --indigo-bg: #eceefb; --indigo-bd: #6a6fd0;
+    --pink-bg: #fcf0f2; --pink-bd: #d2758a;
+    --lime-bg: #eef6e6; --lime-bd: #8bb46a;
+    --new: #e2553f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; }
+  body { width: 1640px; height: 1250px; position: relative; font-family: Inter, -apple-system, sans-serif; color: var(--ink); }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  h1 { position: absolute; left: 48px; top: 26px; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+  .sub { position: absolute; left: 48px; top: 68px; font-size: 15px; color: var(--muted); }
+  .legend { position: absolute; left: 48px; top: 94px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .box { position: absolute; border: 1.5px solid; border-radius: 12px; padding: 14px 18px; }
+  .box.center { text-align: center; }
+  .box h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+  .box p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .box .note { font-size: 12px; color: var(--muted); }
+  .gray { background: var(--gray-bg); border-color: var(--gray-bd); }
+  .dashed { background: #fff; border: 1.5px dashed var(--gray-bd); }
+  .amber { background: var(--amber-bg); border-color: var(--amber-bd); }
+  .green { background: var(--green-bg); border-color: var(--green-bd); }
+  .indigo { background: var(--indigo-bg); border-color: var(--indigo-bd); }
+  .pink { background: var(--pink-bg); border-color: var(--pink-bd); }
+  .lime { background: var(--lime-bg); border-color: var(--lime-bd); }
+  .frame { position: absolute; left: 40px; top: 288px; width: 1560px; height: 830px; border: 1.5px dashed #c5cad3; border-radius: 16px; }
+  .frame-label { position: absolute; left: 60px; top: 1092px; font-size: 12px; letter-spacing: .06em; color: #6b7280; }
+  .row { background: #fff; border: 1px solid #d9dde3; border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
+  .row b { display: block; font-size: 14px; font-weight: 600; }
+  .row span { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .row span.badge, .row b .badge { display: inline-block; margin-top: 0; color: #fff; font-size: 9.5px; }
+  .badge { display: inline-block; vertical-align: 2px; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: var(--new); color: #fff; font: 700 9.5px/1.5 Inter, sans-serif; letter-spacing: .05em; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+  .lbl { position: absolute; font-size: 12px; color: var(--muted); background: #fff; padding: 0 4px; line-height: 1.35; }
+  .stack { position: absolute; left: 48px; top: 1140px; }
+  .stack .t { font-size: 12px; letter-spacing: .1em; color: #6b7280; margin-bottom: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { border: 1px solid #d1d5db; border-radius: 999px; padding: 6px 16px; font-size: 13px; background: #f9fafb; }
+  svg { position: absolute; inset: 0; overflow: visible; }
+</style>
+</head>
+<body>
+  <h1>Arsitektur Web App · Rapatin (Live Notulen UKM)</h1>
+  <div class="sub">Static web app di Vercel. Speech recognition, MFCC, pitch, diarisasi, dan terjemahan berjalan di browser user.</div>
+  <div class="legend"><span class="badge" style="margin:0">BARU</span> = ditambahkan / berubah dibanding versi awal</div>
+
+  <!-- luar browser -->
+  <div class="box gray center" style="left:48px; top:128px; width:350px; height:104px;">
+    <h3>Vercel · static hosting</h3>
+    <p>Vite build: index.html + JS bundle<br />AudioWorklet + 2 Web Worker<br />vercel.json: header COOP/COEP</p>
+  </div>
+  <div class="box dashed center" style="left:1110px; top:100px; width:480px; height:150px;">
+    <h3>Hugging Face Hub</h3>
+    <p>Jennigwen/whisper-base-ukm-codeswitch<br />encoder fp32 82 MB<br />decoder fp32 208 MB (WebGPU) / q8 80 MB (WASM)<br />Xenova/opus-mt-id-en · opus-mt-en-id<br />hanya bobot model, bukan API</p>
+  </div>
+
+  <div class="frame"></div>
+
+  <!-- kolom 1: input -->
+  <div class="box amber center" style="left:72px; top:322px; width:330px; height:118px;">
+    <h3>Sumber audio live <span class="badge">BARU</span></h3>
+    <p>Tab meeting: getDisplayMedia + “Share tab audio”<br />Mikrofon: getUserMedia<br />(tab + mic · tab saja · mic saja)</p>
+  </div>
+  <div class="box amber center" style="left:72px; top:478px; width:330px; height:132px;">
+    <h3>AudioContext 16 kHz + AudioWorklet</h3>
+    <p>thread audio terpisah · mono Float32<br />chunk 0,5 s → ASR Worker</p>
+    <p style="margin-top:6px">MediaRecorder → rekaman .webm <span class="badge">BARU</span></p>
+  </div>
+  <div class="box amber center" style="left:72px; top:648px; width:330px; height:104px;">
+    <h3>Upload file audio/video <span class="badge">BARU</span></h3>
+    <p>decodeAudioData (OfflineAudioContext 16 kHz)<br />pipeline sama, tanpa partial</p>
+  </div>
+  <div class="box pink center" style="left:72px; top:792px; width:330px; height:180px;">
+    <h3>config.ts</h3>
+    <p>MFCC 13 koef · VAD margin c0<br />segmen: hening ≥ 1,5 s · maks 15 s <span class="badge">BARU</span><br />SPEAKER: jarak MFCC ≤ 0,55<br />PITCH: toleransi 2 st · beda speaker ≥ 6 st ·<br />potong giliran ≥ 5,5 st <span class="badge">BARU</span><br />HF_REPO · MT_MODELS</p>
+  </div>
+
+  <!-- kolom 2: ASR worker -->
+  <div class="box green" style="left:450px; top:312px; width:500px; height:612px;">
+    <h3>ASR Worker (Web Worker)</h3>
+    <p class="mono" style="font-size:12px">tidak memblok UI · src/workers/asr.worker.ts</p>
+    <div class="row"><b>MFCC manual · 13 koef</b><span class="mono">dsp/mfcc.ts (port dari notebook)</span></div>
+    <div class="row"><b>Pitch F0 per chunk <span class="badge">BARU</span></b><span class="mono">dsp/pitch.ts · autokorelasi 70–400 Hz → semiton</span></div>
+    <div class="row"><b>VAD c0 + segmentasi</b><span class="mono">hening ≥ 1,5 s / ≥ 15 s / pitch melompat (giliran) → final</span></div>
+    <div class="row"><b>Speaker tracker <span class="badge">BARU</span></b><span class="mono">jarak MFCC (mean/std) + penalti pitch → Speaker 1, 2, …</span></div>
+    <div class="row"><b>Whisper-base ONNX + prompt kosakata <span class="badge">BARU</span></b><span class="mono">Transformers.js · WebGPU, fallback WASM · dsp/whisperPrompt.ts</span></div>
+    <div class="row"><b>Pasca-proses teks <span class="badge">BARU</span></b><span class="mono">filter halusinasi (anotasi, loop, "shh") → koreksi kosakata<br />(ejaan + bunyi) → koreksi tersimpan dari editan user</span></div>
+    <div class="row"><b>Kirim ke UI</b><span class="mono">partial / final + speaker + latency</span></div>
+  </div>
+
+  <!-- kolom 3: UI -->
+  <div class="box indigo" style="left:1040px; top:312px; width:530px; height:478px;">
+    <h3>Main thread · React UI</h3>
+    <p class="mono" style="font-size:12px">Vite + React + TypeScript + Tailwind · state: Zustand · lib/engine.ts</p>
+    <div class="row"><b>Sidebar + 6 halaman <span class="badge">BARU</span></b><span>Beranda (ruang rapat) · Semua rapat · Kalender · Anggota · Arsip · Pengaturan</span></div>
+    <div class="grid2">
+      <div class="row"><b>Sumber audio + Kosakata <span class="badge">BARU</span></b><span>sumber, upload, kosakata, koreksi tersimpan</span></div>
+      <div class="row"><b>RecordButton</b><span>Mulai rekam / Akhiri rapat</span></div>
+      <div class="row"><b>Transkrip / Statistik</b><span>edit, gabung, hapus, catatan manual <span class="badge">BARU</span></span></div>
+      <div class="row"><b>LangToggle</b><span>Asli · ID · EN</span></div>
+      <div class="row"><b>Tindak lanjut + Agenda <span class="badge">BARU</span></b><span>tugas, PIC, tenggat · poin agenda</span></div>
+      <div class="row"><b>Ekspor</b><span>.docx <span class="badge">BARU</span> · .md · .txt · .webm</span></div>
+    </div>
+  </div>
+
+  <div class="box green center" style="left:1040px; top:850px; width:530px; height:100px;">
+    <h3>MT Worker (Web Worker)</h3>
+    <p>opus-mt id↔en · WASM q8<br />hanya segmen final, hasil di-cache per sesi</p>
+  </div>
+
+  <div class="box lime center" style="left:450px; top:960px; width:500px; height:128px;">
+    <h3>Penyimpanan browser</h3>
+    <p>Cache API: bobot model (sekali unduh)<br />IndexedDB: notulen per rapat + agenda, tugas, kosakata, arsip <span class="badge">BARU</span><br />localStorage: profil, kosakata bawaan, koreksi tersimpan <span class="badge">BARU</span></p>
+  </div>
+
+  <div class="frame-label mono">BROWSER USER (Chrome / Edge, WebGPU) · semua inference lokal · audio tidak pernah dikirim ke server</div>
+
+  <svg width="1640" height="1250">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4b5563" /></marker>
+    </defs>
+    <g fill="none" stroke="#4b5563" stroke-width="1.5" marker-end="url(#a)">
+      <path d="M223 232V288" />
+      <path d="M1260 250V270H700V312" stroke-dasharray="5 4" />
+      <path d="M1590 190H1618V900H1571" stroke-dasharray="5 4" />
+      <path d="M237 440V478" />
+      <path d="M402 545H450" />
+      <path d="M402 700H450" />
+      <path d="M402 880H450" />
+      <path d="M950 420H1040" />
+      <path d="M1040 520H950" />
+      <path d="M1180 790V850" />
+      <path d="M1420 850V790" />
+      <path d="M1040 740H1000V1024H950" />
+    </g>
+  </svg>
+  <div class="lbl mono" style="left:232px; top:252px;">load aplikasi</div>
+  <div class="lbl mono" style="left:720px; top:262px;">bobot Whisper (sekali, lalu cache)</div>
+  <div class="lbl mono" style="left:1574px; top:560px;">bobot<br />opus-mt</div>
+  <div class="lbl mono" style="left:404px; top:526px; font-size:10.5px">chunk</div>
+  <div class="lbl mono" style="left:404px; top:681px; font-size:10.5px">file</div>
+  <div class="lbl mono" style="left:404px; top:861px; font-size:10.5px">param</div>
+  <div class="lbl mono" style="left:956px; top:390px; font-size:11px">partial /<br />final</div>
+  <div class="lbl mono" style="left:956px; top:530px; font-size:11px">kosakata ·<br />koreksi <span class="badge" style="margin:0">BARU</span><br />flush · reset</div>
+  <div class="lbl mono" style="left:1188px; top:808px;">segmen final</div>
+  <div class="lbl mono" style="left:1428px; top:808px;">terjemahan</div>
+  <div class="lbl mono" style="left:960px; top:800px;">simpan<br />otomatis</div>
+
+  <div class="stack">
+    <div class="t">TECH STACK</div>
+    <div class="chips">
+      <span class="chip">Vite + React + TS</span><span class="chip">Tailwind CSS</span><span class="chip">Zustand</span>
+      <span class="chip">@huggingface/transformers v3</span><span class="chip">onnxruntime-web</span><span class="chip">Web Audio API</span>
+      <span class="chip">MediaRecorder</span><span class="chip">IndexedDB</span><span class="chip">docx</span><span class="chip">Vercel</span>
+    </div>
+  </div>
+</body>
+</html>

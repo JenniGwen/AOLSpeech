@@ -9,9 +9,11 @@
 //  - "distance" : (default) statistik MFCC per segmen (mean & std per koefisien c0–c12), jarak =
 //                 rata-rata |Δmean| / sebaran frame gabungan. Tidak bergantung statistik global, jadi
 //                 stabil sejak segmen ke-2. Uji TTS: speaker sama 0.26–0.72, beda gender > 0.85.
-import { SPEAKER } from "../config";
+//                 + pitch (median F0, semiton): MFCC tidak peka nada, jadi suara tinggi vs rendah dengan warna
+//                 mirip tetap tergabung. Beda pitch ≥ PITCH.speakerSemitones → speaker lain.
+import { PITCH, SPEAKER } from "../config";
 
-interface Stats { mean: number[]; std: number[] }
+interface Stats { mean: number[]; std: number[]; pitch?: number | null; pitchN?: number }
 
 const segStats = (mf: number[][]): Stats => {
   const d = mf[0]?.length ?? 13;
@@ -25,6 +27,13 @@ const distance = (a: Stats, b: Stats) => {
   let t = 0;
   for (let i = 0; i < a.mean.length; i++) t += Math.abs(a.mean[i] - b.mean[i]) / (Math.sqrt((a.std[i] ** 2 + b.std[i] ** 2) / 2) + 1e-6);
   return t / a.mean.length;
+};
+
+/** Tambahan jarak dari beda pitch (Infinity = pasti beda speaker). */
+const pitchPenalty = (a: number | null | undefined, b: number | null | undefined) => {
+  if (a == null || b == null) return 0;
+  const d = Math.abs(a - b);
+  return d >= PITCH.speakerSemitones ? Infinity : Math.max(0, d - PITCH.tolerance) * PITCH.perSemitone;
 };
 
 const cosine = (a: number[], b: number[]) => {
@@ -43,9 +52,9 @@ export class SpeakerTracker {
 
   constructor(private method: "distance" | "cosine" = SPEAKER.method) {}
 
-  /** mf: frames×13 dari satu segmen final → indeks speaker (0, 1, …). */
-  assign(mf: number[][]): number {
-    return this.method === "cosine" ? this.assignCosine(mf) : this.assignDistance(mf);
+  /** mf: frames×13 dari satu segmen final (+ pitch semiton bila ada) → indeks speaker (0, 1, …). */
+  assign(mf: number[][], pitch: number | null = null): number {
+    return this.method === "cosine" ? this.assignCosine(mf) : this.assignDistance(mf, pitch);
   }
 
   private add(c: Stats | number[]) {
@@ -54,15 +63,16 @@ export class SpeakerTracker {
     return this.cents.length - 1;
   }
 
-  private assignDistance(mf: number[][]) {
-    const s = segStats(mf);
+  private assignDistance(mf: number[][], pitch: number | null) {
+    const s: Stats = { ...segStats(mf), pitch, pitchN: pitch == null ? 0 : 1 };
     if (this.cents.length) {
-      const d = (this.cents as Stats[]).map((c) => distance(s, c));
+      const d = (this.cents as Stats[]).map((c) => distance(s, c) + pitchPenalty(pitch, c.pitch));
       const k = d.indexOf(Math.min(...d));
       if (d[k] < SPEAKER.maxDistance) {
         const c = this.cents[k] as Stats, n = ++this.counts[k];
         c.mean = c.mean.map((x, i) => x + (s.mean[i] - x) / n);
         c.std = c.std.map((x, i) => x + (s.std[i] - x) / n);
+        if (pitch != null) { c.pitchN = (c.pitchN ?? 0) + 1; c.pitch = c.pitch == null ? pitch : c.pitch + (pitch - c.pitch) / c.pitchN; }
         return k;
       }
     }
